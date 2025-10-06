@@ -83,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const events = req.body?.events || [];
-  const now = new Date().toISOString();
+  const now = Date.now();
 
   for (const event of events) {
     const userId = event.source?.userId;
