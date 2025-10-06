@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await baseCreate({
         line_user_id: userId,
         display_name: profile?.displayName || '',
-        profile_image_url: profile?.pictureUrl || '',
+        profile_image_url: profile?.pictureUrl ? { link: profile.pictureUrl } : null,
         joined_at: now,
         entry_source: 'LINE_follow',
         entry_date: now,
@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await baseCreate({
           line_user_id: userId,
           display_name: '',
-          profile_image_url: '',
+          profile_image_url: null,
           joined_at: now,
           entry_source: 'LINE_message',
           entry_date: now,
