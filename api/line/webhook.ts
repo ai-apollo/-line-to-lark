@@ -57,6 +57,7 @@ async function baseFindByUserId(userId: string) {
     }
   );
   const j = await resp.json();
+  console.log('Find response:', JSON.stringify(j, null, 2));
   return j?.data?.items?.[0];
 }
 
@@ -125,10 +126,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rec = await baseFindByUserId(userId);
       }
 
+      if (!rec) {
+        console.error('Failed to find or create record for user:', userId);
+        continue;
+      }
+
+      const recordId = rec.record_id || rec.id;
+      if (!recordId) {
+        console.error('No record ID found for record:', rec);
+        continue;
+      }
+
       const current = rec?.fields || {};
       const newInteractionCount = (current.total_interactions || 0) + 1;
       
-      await baseUpdate(rec.record_id, {
+      await baseUpdate(recordId, {
         first_message_text: current.first_message_text || String(event.message.text),
         last_active_date: now,
         total_interactions: newInteractionCount,
