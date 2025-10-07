@@ -48,6 +48,7 @@ async function baseFindByUserId(userId: string) {
       },
       body: JSON.stringify({
         filter: {
+          conjunction: 'and',
           conditions: [
             { field_name: 'line_user_id', operator: 'is', value: [userId] }
           ]
