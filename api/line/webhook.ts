@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { baseCreateMessageLog } from '../lark/message-log';
 
 // ===== Lark Token取得 =====
 async function getLarkToken() {
@@ -89,13 +90,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 1) follow: 友だち追加
     if (event.type === 'follow') {
       const rec = await baseFindByUserId(userId);
+      const now = Date.now();
+      const nowIso = new Date(now).toISOString();
 
       if (rec) {
         // LIFF経由ですでに登録済み → joined_atだけ更新
         await baseUpdate(rec.record_id, {
-          joined_at: Date.now(),
-          last_active_date: Date.now(),
+          joined_at: now,
+          last_active_date: now,
           is_blocked: false,
+        });
+
+        await baseCreateMessageLog({
+          message_record_id: `${now}`,
+          line_user_id: userId,
+          direction: 'system',
+          event_type: 'follow',
+          message_type: 'system',
+          text: 'followed',
+          ts: nowIso,
+          raw_json: JSON.stringify(event),
+          parent_user: rec.record_id ? [rec.record_id] : undefined,
         });
       } else {
         // LIFF未経由の直接追加
@@ -104,7 +119,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         const profile = await profResp.json().catch(() => ({} as any));
 
-        const now = Date.now();
         await baseCreate({
           line_user_id: userId,
           display_name: profile?.displayName || '',
@@ -117,35 +131,90 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           last_active_date: now,
           is_blocked: false,
         });
+
+        await baseCreateMessageLog({
+          message_record_id: `${now}`,
+          line_user_id: userId,
+          direction: 'system',
+          event_type: 'follow',
+          message_type: 'system',
+          text: 'followed',
+          ts: nowIso,
+          raw_json: JSON.stringify(event),
+        });
       }
     }
 
     // 2) message: テキストメッセージ受信
     if (event.type === 'message' && event.message?.type === 'text') {
       let rec = await baseFindByUserId(userId);
+      const createdAt = Date.now();
       if (!rec) {
-        const now = Date.now();
         await baseCreate({
           line_user_id: userId,
           display_name: '',
           profile_image_url: null,
-          joined_at: now,
-          entry_date: now,
+          joined_at: createdAt,
+          entry_date: createdAt,
           entry_source: 'direct',
           engagement_score: 0,
           total_interactions: 0,
-          last_active_date: now,
+          last_active_date: createdAt,
           is_blocked: false,
         });
         rec = await baseFindByUserId(userId);
       }
 
-      const current = rec?.fields || {};
-      await baseUpdate(rec.record_id, {
+      if (!rec) {
+        console.error('Failed to find or create record for user:', userId);
+        continue;
+      }
+
+      const recordId = rec.record_id;
+      if (!recordId) {
+        console.error('No record ID found for record:', rec);
+        continue;
+      }
+
+      const current = rec.fields || {};
+      const updateTimestamp = Date.now();
+      await baseUpdate(recordId, {
         first_message_text: current.first_message_text || String(event.message.text),
         engagement_score: (current.engagement_score || 0) + 1,
         total_interactions: (current.total_interactions || 0) + 1,
-        last_active_date: Date.now(),
+        last_active_date: updateTimestamp,
+      });
+
+      const text = event.message.text ?? '';
+      const messageId = (event.message as any)?.id;
+
+      await baseCreateMessageLog({
+        message_record_id: `${Date.now()}-${messageId ?? ''}`,
+        line_user_id: userId,
+        direction: 'incoming',
+        event_type: 'message',
+        message_type: 'text',
+        text,
+        payload: '',
+        ts: new Date(updateTimestamp).toISOString(),
+        message_id: messageId,
+        raw_json: JSON.stringify(event),
+        parent_user: [recordId],
+      });
+    }
+
+    if (event.type === 'postback') {
+      const data = event.postback?.data ?? '';
+      await baseCreateMessageLog({
+        message_record_id: `${Date.now()}`,
+        line_user_id: userId,
+        direction: 'incoming',
+        event_type: 'postback',
+        message_type: 'postback',
+        text: '',
+        payload: data,
+        ts: new Date().toISOString(),
+        raw_json: JSON.stringify(event),
       });
     }
 
@@ -173,6 +242,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           total_interactions: 0,
         });
       }
+
+      await baseCreateMessageLog({
+        message_record_id: `${Date.now()}`,
+        line_user_id: userId,
+        direction: 'system',
+        event_type: 'unfollow',
+        message_type: 'system',
+        text: 'unfollowed',
+        ts: new Date().toISOString(),
+        raw_json: JSON.stringify(event),
+        parent_user: rec?.record_id ? [rec.record_id] : undefined,
+      });
     }
   }
 
