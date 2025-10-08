@@ -95,6 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await baseUpdate(rec.record_id, {
           joined_at: Date.now(),
           last_active_date: Date.now(),
+          is_blocked: false,
         });
       } else {
         // LIFF未経由の直接追加
@@ -114,6 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: now,
+          is_blocked: false,
         });
       }
     }
@@ -133,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: now,
+          is_blocked: false,
         });
         rec = await baseFindByUserId(userId);
       }
@@ -144,6 +147,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         total_interactions: (current.total_interactions || 0) + 1,
         last_active_date: Date.now(),
       });
+    }
+
+    // 3) ブロック／削除（unfollow）
+    if (event.type === 'unfollow') {
+      const rec = await baseFindByUserId(userId);
+      const now = Date.now();
+
+      if (rec?.record_id) {
+        await baseUpdate(rec.record_id, {
+          is_blocked: true,
+          unsubscribed_at: now,
+          last_active_date: now,
+          entry_source: 'LINE_unfollow',
+        });
+      } else {
+        await baseCreate({
+          line_user_id: userId,
+          is_blocked: true,
+          unsubscribed_at: now,
+          entry_date: now,
+          last_active_date: now,
+          entry_source: 'LINE_unfollow',
+          engagement_score: 0,
+          total_interactions: 0,
+        });
+      }
     }
   }
 
