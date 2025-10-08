@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>友だち追加</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 30px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    h1 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .loading {
+      display: inline-block;
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 20px 0;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .profile {
+      margin: 20px 0;
+    }
+    .profile img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      margin-bottom: 10px;
+    }
+    .profile p {
+      font-size: 18px;
+      color: #555;
+      font-weight: 500;
+    }
+    .message {
+      margin: 20px 0;
+      font-size: 16px;
+      color: #666;
+      line-height: 1.6;
+    }
+    .btn {
+      display: inline-block;
+      padding: 15px 40px;
+      background: #06c755;
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      transition: background 0.3s;
+      margin-top: 10px;
+    }
+    .btn:hover {
+      background: #05b34a;
+    }
+    .success {
+      color: #06c755;
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .error {
+      color: #ff4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="content">
+      <h1>登録処理中...</h1>
+      <div class="loading"></div>
+    </div>
+  </div>
+
+  <script>
+    const LIFF_ID = '2008252843-G6k1DX03';
+    const BOT_BASIC_ID = '@268tzvcj';
+
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get('source') || 'unknown';
+
+    liff.init({ liffId: LIFF_ID })
+      .then(() => {
+        if (liff.isLoggedIn()) {
+          liff.getProfile()
+            .then(profile => {
+              return fetch('/api/line/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: profile.userId,
+                  displayName: profile.displayName,
+                  pictureUrl: profile.pictureUrl,
+                  source: source
+                })
+              })
+              .then(res => res.json())
+              .then(data => {
+                document.getElementById('content').innerHTML = `
+                  <div class="success">✓</div>
+                  <div class="profile">
+                    <img src="${profile.pictureUrl}" alt="${profile.displayName}">
+                    <p>${profile.displayName}さん</p>
+                  </div>
+                  <div class="message">
+                    登録情報を保存しました！<br>
+                    続けて公式アカウントを<br>
+                    友だち追加してください
+                  </div>
+                  <a href="https://line.me/R/ti/p/${BOT_BASIC_ID}" class="btn">
+                    友だち追加する
+                  </a>
+                `;
+              });
+            })
+            .catch(err => {
+              console.error('Profile error:', err);
+              showError('プロフィール取得に失敗しました');
+            });
+        } else {
+          liff.login();
+        }
+      })
+      .catch(err => {
+        console.error('LIFF init error:', err);
+        showError('初期化に失敗しました');
+      });
+
+    function showError(message) {
+      document.getElementById('content').innerHTML = `
+        <h1 class="error">エラー</h1>
+        <div class="message">${message}</div>
+      `;
+    }
+  </script>
+</body>
+</html>
