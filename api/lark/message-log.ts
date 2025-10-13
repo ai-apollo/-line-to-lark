@@ -25,7 +25,7 @@ type Fields = {
   ts?: string;
   message_id?: string;
   raw_json?: string;
-  parent_uses?: string[];
+  parent_user?: string[];
 };
 
 export async function baseCreateMessageLog(fields: Fields) {

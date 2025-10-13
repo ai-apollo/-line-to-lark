@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { baseCreateMessageLog } from '../lark/message-log';
 
-// ===== Lark Token取得 =====
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -18,7 +17,6 @@ async function getLarkToken() {
   return j.tenant_access_token as string;
 }
 
-// ===== レコード検索 =====
 async function baseFindByUserId(userId: string) {
   const token = await getLarkToken();
   const resp = await fetch(
@@ -44,8 +42,7 @@ async function baseFindByUserId(userId: string) {
   return j?.data?.items?.[0];
 }
 
-// ===== レコード作成 =====
-async function baseCreate(fields: any) {
+async function baseCreate(fields: any): Promise<{ record_id: string; fields: any } | null> {
   const token = await getLarkToken();
   const resp = await fetch(
     `https://open.larksuite.com/open-apis/bitable/v1/apps/${process.env.LARK_APP_TOKEN}/tables/${process.env.LARK_TABLE_ID}/records/batch_create`,
@@ -58,10 +55,16 @@ async function baseCreate(fields: any) {
       body: JSON.stringify({ records: [{ fields }] }),
     }
   );
-  if (!resp.ok) console.error('Create Error:', await resp.text());
+  if (!resp.ok) {
+    console.error('Create Error:', await resp.text());
+    return null;
+  }
+  const result = await resp.json();
+  const record = result?.data?.records?.[0];
+  if (!record?.record_id) return null;
+  return { record_id: record.record_id, fields };
 }
 
-// ===== レコード更新 =====
 async function baseUpdate(recordId: string, fields: any) {
   const token = await getLarkToken();
   const resp = await fetch(
@@ -78,23 +81,24 @@ async function baseUpdate(recordId: string, fields: any) {
   if (!resp.ok) console.error('Update Error:', await resp.text());
 }
 
-// ===== メイン処理 =====
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+
+  console.log('🟢 Webhook received');
 
   const events = req.body?.events || [];
   for (const event of events) {
     const userId = event.source?.userId;
     if (!userId) continue;
 
-    // 1) follow: 友だち追加
+    console.log('🟢 Processing event:', event.type, 'for user:', userId);
+
     if (event.type === 'follow') {
-      const rec = await baseFindByUserId(userId);
       const now = Date.now();
       const nowIso = new Date(now).toISOString();
 
-      if (rec) {
-        // LIFF経由ですでに登録済み → joined_atだけ更新
+      let rec = await baseFindByUserId(userId);
+      if (rec?.record_id) {
         await baseUpdate(rec.record_id, {
           joined_at: now,
           last_active_date: now,
@@ -110,19 +114,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: 'followed',
           ts: nowIso,
           raw_json: JSON.stringify(event),
-          parent_user: rec.record_id ? [rec.record_id] : undefined,
+          parent_user: [rec.record_id],
         });
       } else {
-        // LIFF未経由の直接追加
-        const profResp = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
-          headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
-        });
-        const profile = await profResp.json().catch(() => ({} as any));
-
-        await baseCreate({
+        const created = await baseCreate({
           line_user_id: userId,
-          display_name: profile?.displayName || '',
-          profile_image_url: profile?.pictureUrl ? { link: profile.pictureUrl } : null,
+          display_name: '',
+          profile_image_url: null,
           joined_at: now,
           entry_date: now,
           entry_source: 'direct',
@@ -141,16 +139,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: 'followed',
           ts: nowIso,
           raw_json: JSON.stringify(event),
+          parent_user: created?.record_id ? [created.record_id] : undefined,
         });
       }
+      continue;
     }
 
-    // 2) message: テキストメッセージ受信
     if (event.type === 'message' && event.message?.type === 'text') {
+      console.log('🟡 Message event detected');
+      
       let rec = await baseFindByUserId(userId);
       const createdAt = Date.now();
+      
       if (!rec) {
-        await baseCreate({
+        const created = await baseCreate({
           line_user_id: userId,
           display_name: '',
           profile_image_url: null,
@@ -162,22 +164,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           last_active_date: createdAt,
           is_blocked: false,
         });
-        rec = await baseFindByUserId(userId);
+        if (created?.record_id) {
+          rec = { record_id: created.record_id, fields: created.fields } as any;
+        } else {
+          rec = await baseFindByUserId(userId);
+        }
       }
 
       if (!rec) {
-        console.error('Failed to find or create record for user:', userId);
+        console.error('❌ Failed to find or create record');
         continue;
       }
 
       const recordId = rec.record_id;
       if (!recordId) {
-        console.error('No record ID found for record:', rec);
+        console.error('❌ Record missing record_id:', rec);
         continue;
       }
 
       const current = rec.fields || {};
       const updateTimestamp = Date.now();
+      
       await baseUpdate(recordId, {
         first_message_text: current.first_message_text || String(event.message.text),
         engagement_score: (current.engagement_score || 0) + 1,
@@ -188,19 +195,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const text = event.message.text ?? '';
       const messageId = (event.message as any)?.id;
 
-      await baseCreateMessageLog({
-        message_record_id: `${Date.now()}-${messageId ?? ''}`,
-        line_user_id: userId,
-        direction: 'incoming',
-        event_type: 'message',
-        message_type: 'text',
-        text,
-        payload: '',
-        ts: new Date(updateTimestamp).toISOString(),
-        message_id: messageId,
-        raw_json: JSON.stringify(event),
-        parent_user: [recordId],
-      });
+      console.log('🟡 About to call baseCreateMessageLog');
+      
+      try {
+        await baseCreateMessageLog({
+          message_record_id: `${Date.now()}-${messageId ?? ''}`,
+          line_user_id: userId,
+          direction: 'incoming',
+          event_type: 'message',
+          message_type: 'text',
+          text,
+          payload: '',
+          ts: new Date(updateTimestamp).toISOString(),
+          message_id: messageId,
+          raw_json: JSON.stringify(event),
+          parent_user: [recordId],
+        });
+        console.log('✅ baseCreateMessageLog completed');
+      } catch (err) {
+        console.error('❌ baseCreateMessageLog failed:', err);
+      }
+      continue;
     }
 
     if (event.type === 'postback') {
@@ -216,12 +231,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ts: new Date().toISOString(),
         raw_json: JSON.stringify(event),
       });
+      continue;
     }
 
-    // 3) ブロック／削除（unfollow）
     if (event.type === 'unfollow') {
-      const rec = await baseFindByUserId(userId);
       const now = Date.now();
+      const rec = await baseFindByUserId(userId);
 
       if (rec?.record_id) {
         await baseUpdate(rec.record_id, {
@@ -231,7 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           entry_source: 'LINE_unfollow',
         });
       } else {
-        await baseCreate({
+        const created = await baseCreate({
           line_user_id: userId,
           is_blocked: true,
           unsubscribed_at: now,
@@ -241,6 +256,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           engagement_score: 0,
           total_interactions: 0,
         });
+        if (created?.record_id) {
+          rec = { record_id: created.record_id } as any;
+        }
       }
 
       await baseCreateMessageLog({
