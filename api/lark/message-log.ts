@@ -16,30 +16,37 @@ export async function getLarkToken(): Promise<string> {
 
 type Fields = {
   message_record_id?: string;
-  line_user_id: string;
-  direction: 'incoming' | 'outgoing' | 'system';
-  event_type: 'message' | 'postback' | 'follow' | 'unfollow';
+  line_user_id?: string;
+  direction?: string;
+  event_type?: string;
   message_type?: string;
   text?: string;
   payload?: string;
-  ts: string;
+  ts?: string;
   message_id?: string;
   raw_json?: string;
-  parent_user?: string[];
+  parent_uses?: string[];
 };
 
 export async function baseCreateMessageLog(fields: Fields) {
+  console.log('🔵 baseCreateMessageLog called with:', JSON.stringify(fields));
+  
   const token = await getLarkToken();
   const appToken = process.env.LARK_APP_TOKEN;
   const tableId = process.env.LARK_MESSAGES_TABLE_ID;
 
+  console.log('🔵 Env check:', { 
+    hasToken: !!token, 
+    hasAppToken: !!appToken, 
+    tableId: tableId 
+  });
+
   if (!token || !appToken || !tableId) {
-    console.error('Lark env missing. Check LARK_APP_TOKEN / LARK_MESSAGES_TABLE_ID / token');
+    console.error('❌ Lark env missing');
     return;
   }
 
   const url = `https://open.larksuite.com/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create`;
-  const body = { records: [{ fields }] };
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -47,11 +54,13 @@ export async function baseCreateMessageLog(fields: Fields) {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ records: [{ fields }] }),
   });
 
   if (!resp.ok) {
-    const t = await resp.text();
-    console.error('Create Message Log Error:', t);
+    const text = await resp.text();
+    console.error('❌ Create Message Log Error:', resp.status, text);
+  } else {
+    console.log('✅ Message log created successfully');
   }
 }
