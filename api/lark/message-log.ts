@@ -10,7 +10,7 @@ export async function getLarkToken(): Promise<string> {
       }),
     }
   );
-  const j = await resp.json();
+  const j: any = await resp.json();
   return j.tenant_access_token as string;
 }
 

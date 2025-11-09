@@ -12,7 +12,7 @@ async function getLarkToken() {
       }),
     }
   );
-  const j = await resp.json();
+  const j: any = await resp.json();
   return j.tenant_access_token as string;
 }
 
@@ -30,14 +30,14 @@ async function baseFindByUserId(userId: string) {
         filter: {
           logic: 'AND',
           conditions: [
-            { field_name: 'line_user_id', operator: 'equals', value: [userId] }
+            { field_name: 'user_id', operator: 'equals', value: [userId] }
           ],
         },
         page_size: 1,
       }),
     }
   );
-  const j = await resp.json();
+  const j: any = await resp.json();
   return j?.data?.items?.[0];
 }
 

@@ -13,7 +13,7 @@ async function getLarkToken() {
       }),
     }
   );
-  const j = await resp.json();
+  const j: any = await resp.json();
   return j.tenant_access_token as string;
 }
 
@@ -31,14 +31,14 @@ async function baseFindByUserId(userId: string) {
         filter: {
           logic: 'AND',
           conditions: [
-            { field_name: 'line_user_id', operator: 'equals', value: [userId] }
+            { field_name: 'user_id', operator: 'equals', value: [userId] }
           ],
         },
         page_size: 1,
       }),
     }
   );
-  const j = await resp.json();
+  const j: any = await resp.json();
   return j?.data?.items?.[0];
 }
 
@@ -59,7 +59,7 @@ async function baseCreate(fields: any): Promise<{ record_id: string; fields: any
     console.error('Create Error:', await resp.text());
     return null;
   }
-  const result = await resp.json();
+  const result: any = await resp.json();
   const record = result?.data?.records?.[0];
   if (!record?.record_id) return null;
   return { record_id: record.record_id, fields };
@@ -236,7 +236,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (event.type === 'unfollow') {
       const now = Date.now();
-      const rec = await baseFindByUserId(userId);
+      let rec = await baseFindByUserId(userId);
 
       if (rec?.record_id) {
         await baseUpdate(rec.record_id, {
