@@ -1,0 +1,19 @@
+# Environment variables (contains secrets)
+.env
+.env.local
+.env*.local
+
+# Dependencies
+node_modules/
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+
+# Test files
+test-*.ts
