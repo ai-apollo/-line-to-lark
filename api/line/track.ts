@@ -87,19 +87,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (rec) {
       await baseUpdate(rec.record_id, {
-        entry_source: source || 'liff',
-        display_name: displayName || rec.fields.display_name,
-        profile_image_url: pictureUrl ? { link: pictureUrl } : rec.fields.profile_image_url,
+        source: source || 'liff',
+        name: displayName || rec.fields.name,
+        profile_image: pictureUrl ? { link: pictureUrl } : rec.fields.profile_image,
         last_active_date: Date.now(),
       });
     } else {
       const now = Date.now();
       await baseCreate({
-        line_user_id: userId,
-        display_name: displayName || '',
-        profile_image_url: pictureUrl ? { link: pictureUrl } : null,
-        entry_source: source || 'liff',
-        entry_date: now,
+        user_id: userId,
+        name: displayName || '',
+        profile_image: pictureUrl ? { link: pictureUrl } : null,
+        source: source || 'liff',
+        day: now,
         joined_at: now,
         engagement_score: 0,
         total_interactions: 0,

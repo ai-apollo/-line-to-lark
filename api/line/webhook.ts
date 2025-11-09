@@ -118,12 +118,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       } else {
         const created = await baseCreate({
-          line_user_id: userId,
-          display_name: '',
-          profile_image_url: null,
+          user_id: userId,
+          name: '',
+          profile_image: null,
           joined_at: now,
-          entry_date: now,
-          entry_source: 'direct',
+          day: now,
+          source: 'direct',
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: now,
@@ -153,12 +153,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (!rec) {
         const created = await baseCreate({
-          line_user_id: userId,
-          display_name: '',
-          profile_image_url: null,
+          user_id: userId,
+          name: '',
+          profile_image: null,
           joined_at: createdAt,
-          entry_date: createdAt,
-          entry_source: 'direct',
+          day: createdAt,
+          source: 'direct',
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: createdAt,
@@ -243,16 +243,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           is_blocked: true,
           unsubscribed_at: now,
           last_active_date: now,
-          entry_source: 'LINE_unfollow',
+          source: 'LINE_unfollow',
         });
       } else {
         const created = await baseCreate({
-          line_user_id: userId,
+          user_id: userId,
           is_blocked: true,
           unsubscribed_at: now,
-          entry_date: now,
+          day: now,
           last_active_date: now,
-          entry_source: 'LINE_unfollow',
+          source: 'LINE_unfollow',
           engagement_score: 0,
           total_interactions: 0,
         });
