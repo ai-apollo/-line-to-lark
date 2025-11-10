@@ -72,6 +72,9 @@ async function baseFindByUserId(userId: string) {
 
 async function baseCreate(fields: any): Promise<{ record_id: string; fields: any } | null> {
   const token = await getLarkToken();
+  console.log('🔵 Creating new record');
+  console.log('🔵 Create fields:', JSON.stringify(fields, null, 2));
+
   const resp = await fetch(
     `https://open.larksuite.com/open-apis/bitable/v1/apps/${process.env.LARK_APP_TOKEN}/tables/${process.env.LARK_TABLE_ID}/records/batch_create`,
     {
@@ -83,18 +86,28 @@ async function baseCreate(fields: any): Promise<{ record_id: string; fields: any
       body: JSON.stringify({ records: [{ fields }] }),
     }
   );
+
   if (!resp.ok) {
-    console.error('Create Error:', await resp.text());
+    const errorText = await resp.text();
+    console.error('❌ Create Error:', resp.status, errorText);
     return null;
   }
+
   const result: any = await resp.json();
+  console.log('✅ Create response:', JSON.stringify(result, null, 2));
+
   const record = result?.data?.records?.[0];
   if (!record?.record_id) return null;
+
+  console.log('✅ Record created successfully:', record.record_id);
   return { record_id: record.record_id, fields };
 }
 
 async function baseUpdate(recordId: string, fields: any) {
   const token = await getLarkToken();
+  console.log('🔵 Updating record:', recordId);
+  console.log('🔵 Update fields:', JSON.stringify(fields, null, 2));
+
   const resp = await fetch(
     `https://open.larksuite.com/open-apis/bitable/v1/apps/${process.env.LARK_APP_TOKEN}/tables/${process.env.LARK_TABLE_ID}/records/${recordId}`,
     {
@@ -106,7 +119,14 @@ async function baseUpdate(recordId: string, fields: any) {
       body: JSON.stringify({ fields }),
     }
   );
-  if (!resp.ok) console.error('Update Error:', await resp.text());
+
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error('❌ Update Error:', resp.status, errorText);
+    throw new Error(`Update failed: ${errorText}`);
+  } else {
+    console.log('✅ Record updated successfully');
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
