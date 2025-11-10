@@ -1,18 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Helper function to format text fields for Bitable
-function textField(value: string) {
-  return value ? [{ text: value, type: 'text' }] : undefined;
-}
-
-// Helper function to extract text from Bitable text field
-function getTextField(field: any): string {
-  if (!field) return '';
-  if (typeof field === 'string') return field;
-  if (Array.isArray(field) && field[0]?.text) return field[0].text;
-  return '';
-}
-
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -101,16 +88,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (rec) {
       await baseUpdate(rec.record_id, {
         source: source || 'liff',
-        name: textField(displayName || getTextField(rec.fields.name)),
-        profile_image_url: textField(pictureUrl || getTextField(rec.fields.profile_image_url)),
+        name: displayName || rec.fields.name || '',
+        profile_image_url: pictureUrl || rec.fields.profile_image_url || '',
         last_active_date: Date.now(),
       });
     } else {
       const now = Date.now();
       await baseCreate({
-        user_id: textField(userId),
-        name: textField(displayName || ''),
-        profile_image_url: textField(pictureUrl || ''),
+        user_id: userId,
+        name: displayName || '',
+        profile_image_url: pictureUrl || '',
         source: source || 'liff',
         day: now,
         joined_at: now,
