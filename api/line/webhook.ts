@@ -17,6 +17,34 @@ async function getLarkToken() {
   return j.tenant_access_token as string;
 }
 
+async function getLineProfile(userId: string) {
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!accessToken) return null;
+
+  try {
+    const resp = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!resp.ok) {
+      console.error('❌ LINE Profile API Error:', await resp.text());
+      return null;
+    }
+
+    const profile: any = await resp.json();
+    return {
+      displayName: profile.displayName,
+      pictureUrl: profile.pictureUrl,
+      statusMessage: profile.statusMessage,
+    };
+  } catch (error) {
+    console.error('❌ Failed to get LINE profile:', error);
+    return null;
+  }
+}
+
 async function baseFindByUserId(userId: string) {
   const token = await getLarkToken();
   const resp = await fetch(
@@ -97,9 +125,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const now = Date.now();
       const nowIso = new Date(now).toISOString();
 
+      // LINEプロフィール情報を取得
+      const profile = await getLineProfile(userId);
+      console.log('📱 LINE Profile:', profile);
+
       let rec = await baseFindByUserId(userId);
       if (rec?.record_id) {
+        // 既存レコードを更新（プロフィール情報も更新）
         await baseUpdate(rec.record_id, {
+          name: profile?.displayName || rec.fields.name,
+          profile_image: profile?.pictureUrl ? { link: profile.pictureUrl } : rec.fields.profile_image,
+          status_message: profile?.statusMessage || rec.fields.status_message,
           joined_at: now,
           last_active_date: now,
           is_blocked: false,
@@ -117,10 +153,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           parent_user: [rec.record_id],
         });
       } else {
+        // 新規レコードを作成（プロフィール情報を含める）
         const created = await baseCreate({
           user_id: userId,
-          name: '',
-          profile_image: null,
+          name: profile?.displayName || '',
+          profile_image: profile?.pictureUrl ? { link: profile.pictureUrl } : null,
+          status_message: profile?.statusMessage || '',
           joined_at: now,
           day: now,
           source: 'direct',
@@ -147,15 +185,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (event.type === 'message' && event.message?.type === 'text') {
       console.log('🟡 Message event detected');
-      
+
       let rec = await baseFindByUserId(userId);
       const createdAt = Date.now();
-      
+
       if (!rec) {
+        // レコードがない場合、プロフィール情報を取得して作成
+        const profile = await getLineProfile(userId);
+        console.log('📱 LINE Profile (message):', profile);
+
         const created = await baseCreate({
           user_id: userId,
-          name: '',
-          profile_image: null,
+          name: profile?.displayName || '',
+          profile_image: profile?.pictureUrl ? { link: profile.pictureUrl } : null,
+          status_message: profile?.statusMessage || '',
           joined_at: createdAt,
           day: createdAt,
           source: 'direct',
