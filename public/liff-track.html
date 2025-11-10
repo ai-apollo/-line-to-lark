@@ -170,8 +170,8 @@
       const btnEl = document.getElementById('addFriendBtn');
 
       try {
-        // LIFF初期化（後でLIFF IDを設定）
-        await liff.init({ liffId: '${LIFF_ID}' });
+        // LIFF初期化
+        await liff.init({ liffId: '2008252843-G6k1DX03' });
 
         if (!liff.isLoggedIn()) {
           // 未ログインの場合はログインリダイレクト
