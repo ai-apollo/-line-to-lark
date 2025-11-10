@@ -5,6 +5,14 @@ function textField(value: string) {
   return value ? [{ text: value, type: 'text' }] : undefined;
 }
 
+// Helper function to extract text from Bitable text field
+function getTextField(field: any): string {
+  if (!field) return '';
+  if (typeof field === 'string') return field;
+  if (Array.isArray(field) && field[0]?.text) return field[0].text;
+  return '';
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -93,8 +101,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (rec) {
       await baseUpdate(rec.record_id, {
         source: source || 'liff',
-        name: textField(displayName || rec.fields.name),
-        profile_image_url: textField(pictureUrl || rec.fields.profile_image_url),
+        name: textField(displayName || getTextField(rec.fields.name)),
+        profile_image_url: textField(pictureUrl || getTextField(rec.fields.profile_image_url)),
         last_active_date: Date.now(),
       });
     } else {

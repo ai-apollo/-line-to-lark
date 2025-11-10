@@ -6,6 +6,14 @@ function textField(value: string) {
   return value ? [{ text: value, type: 'text' }] : undefined;
 }
 
+// Helper function to extract text from Bitable text field
+function getTextField(field: any): string {
+  if (!field) return '';
+  if (typeof field === 'string') return field;
+  if (Array.isArray(field) && field[0]?.text) return field[0].text;
+  return '';
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -158,9 +166,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (rec?.record_id) {
         // 既存レコードを更新（プロフィール情報も更新）
         await baseUpdate(rec.record_id, {
-          name: textField(profile?.displayName || rec.fields.name),
-          profile_image_url: textField(profile?.pictureUrl || rec.fields.profile_image_url),
-          status_message: textField(profile?.statusMessage || rec.fields.status_message),
+          name: textField(profile?.displayName || getTextField(rec.fields.name)),
+          profile_image_url: textField(profile?.pictureUrl || getTextField(rec.fields.profile_image_url)),
+          status_message: textField(profile?.statusMessage || getTextField(rec.fields.status_message)),
           joined_at: now,
           last_active_date: now,
           is_blocked: false,
@@ -254,7 +262,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const updateTimestamp = Date.now();
 
       await baseUpdate(recordId, {
-        first_message_text: textField(current.first_message_text || String(event.message.text)),
+        first_message_text: textField(getTextField(current.first_message_text) || String(event.message.text)),
         engagement_score: (current.engagement_score || 0) + 1,
         total_interactions: (current.total_interactions || 0) + 1,
         last_active_date: updateTimestamp,
