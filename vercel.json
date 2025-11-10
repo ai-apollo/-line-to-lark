@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/liff-track",
+      "destination": "/public/liff-track.html"
+    }
+  ]
+}

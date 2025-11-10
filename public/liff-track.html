@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>友だち追加 - LINE公式アカウント</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #06C755 0%, #00B900 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 30px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .logo {
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .source-tag {
+      display: inline-block;
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .message {
+      color: #666;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+    .button {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: #06C755;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+    }
+    .button:hover {
+      background: #05b34c;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(6, 199, 85, 0.3);
+    }
+    .button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status {
+      font-size: 13px;
+      color: #999;
+      margin-top: 20px;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #06C755;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .success {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+    .error {
+      color: #c62828;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">💚</div>
+    <h1>LINE公式アカウント</h1>
+    <div class="source-tag" id="sourceTag">直接アクセス</div>
+    <p class="message">
+      友だち追加していただくと、<br>
+      お得な情報やサポートをお届けします！
+    </p>
+    <button class="button" id="addFriendBtn" disabled>
+      <span class="loading"></span>
+      読み込み中...
+    </button>
+    <div class="status" id="status">LINEに接続中...</div>
+  </div>
+
+  <script>
+    const SOURCE_LABELS = {
+      'note': '📝 note経由',
+      'X': '🐦 X（Twitter）経由',
+      'LP': '🌐 ランディングページ経由',
+      'ads': '📢 広告経由',
+      'direct': '🔗 直接アクセス',
+    };
+
+    // URLパラメータからsourceを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const source = urlParams.get('source') || 'direct';
+    const sourceLabel = SOURCE_LABELS[source] || SOURCE_LABELS['direct'];
+
+    document.getElementById('sourceTag').textContent = sourceLabel;
+
+    async function trackUser(userId, displayName, pictureUrl) {
+      try {
+        const response = await fetch('/api/line/track', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId,
+            displayName,
+            pictureUrl,
+            source,
+          }),
+        });
+
+        const result = await response.json();
+        console.log('✅ Tracking result:', result);
+        return result.success;
+      } catch (error) {
+        console.error('❌ Tracking error:', error);
+        return false;
+      }
+    }
+
+    async function initLiff() {
+      const statusEl = document.getElementById('status');
+      const btnEl = document.getElementById('addFriendBtn');
+
+      try {
+        // LIFF初期化（後でLIFF IDを設定）
+        await liff.init({ liffId: '${LIFF_ID}' });
+
+        if (!liff.isLoggedIn()) {
+          // 未ログインの場合はログインリダイレクト
+          liff.login();
+          return;
+        }
+
+        // ユーザープロフィール取得
+        const profile = await liff.getProfile();
+        console.log('👤 User profile:', profile);
+
+        // トラッキング送信
+        statusEl.innerHTML = '📊 アクセスを記録中...';
+        const tracked = await trackUser(profile.userId, profile.displayName, profile.pictureUrl);
+
+        if (tracked) {
+          statusEl.innerHTML = '<span class="success">✅ 記録完了</span>';
+        } else {
+          statusEl.innerHTML = '<span class="error">⚠️ 記録に失敗しましたが続行できます</span>';
+        }
+
+        // 友達追加状態を確認
+        const friendship = await liff.getFriendship();
+
+        if (friendship.friendFlag) {
+          // 既に友達
+          btnEl.textContent = '✅ 友だち追加済み';
+          btnEl.disabled = true;
+          statusEl.innerHTML = '<span class="success">✅ 既に友だち追加されています</span>';
+        } else {
+          // 未追加の場合
+          btnEl.textContent = '友だち追加する';
+          btnEl.disabled = false;
+          btnEl.onclick = () => {
+            // LINE公式アカウントのURLにリダイレクト
+            window.location.href = 'https://line.me/R/ti/p/@あなたのLINE_ID';
+          };
+        }
+
+      } catch (error) {
+        console.error('❌ LIFF Error:', error);
+        statusEl.innerHTML = '<span class="error">❌ エラーが発生しました</span>';
+        btnEl.textContent = '再読み込み';
+        btnEl.disabled = false;
+        btnEl.onclick = () => location.reload();
+      }
+    }
+
+    // LIFF初期化
+    initLiff();
+  </script>
+</body>
+</html>
