@@ -1,25 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { baseCreateMessageLog } from '../lark/message-log';
 
-// Source field is Single Select type - must use option IDs
-const SOURCE_OPTIONS: Record<string, string> = {
-  'direct': 'opt309346094',
-  'LINE_unfollow': 'opt1446290028',
-  'liff': 'optOFn2osL',
-  'note': 'opt554171163',
-  'X': 'optqRXvjoQ',
-  'LP': 'optpu3tsBy',
-  'ads': 'optD08TRT9',
-};
+type SourceLabel = 'direct' | 'liff' | 'X' | 'note' | 'LP' | 'ads' | 'LINE_unfollow';
 
-function getSourceOptionId(source: string): string {
-  return SOURCE_OPTIONS[source] || SOURCE_OPTIONS['direct'];
-}
-
-// Single Select fields require object format { id: "opt..." }
-function asSingleSelect(optionId: string) {
-  return { id: optionId };
-}
+let SOURCE_DICT: Record<SourceLabel, string> = {} as any;
+let dictInitialized = false;
 
 async function getLarkToken() {
   const resp = await fetch(
@@ -34,7 +19,63 @@ async function getLarkToken() {
     }
   );
   const j: any = await resp.json();
-  return j.tenant_access_token as string;
+  return j.tenant_access_token;
+}
+
+async function buildSourceDict() {
+  if (dictInitialized) return;
+
+  try {
+    const token = await getLarkToken();
+    const resp = await fetch(
+      `https://open.larksuite.com/open-apis/bitable/v1/apps/${process.env.LARK_APP_TOKEN}/tables/${process.env.LARK_TABLE_ID}/fields`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const meta: any = await resp.json();
+
+    const map: Record<string, string> = {};
+    for (const f of meta?.data?.items || []) {
+      if (f.field_name === 'source') {
+        for (const opt of f.property?.options || []) {
+          map[String(opt.name).toLowerCase()] = opt.id;
+        }
+      }
+    }
+
+    SOURCE_DICT = {
+      direct: map['direct'] || 'opt309346094',
+      liff: map['liff'] || 'optOFn2osL',
+      X: map['x'] || 'optqRXvjoQ',
+      note: map['note'] || 'opt554171163',
+      LP: map['lp'] || 'optpu3tsBy',
+      ads: map['ads'] || 'optD08TRT9',
+      LINE_unfollow: map['line_unfollow'] || 'opt1446290028',
+    } as any;
+
+    dictInitialized = true;
+    console.log('✅ SOURCE_DICT built:', SOURCE_DICT);
+  } catch (error) {
+    console.error('❌ Failed to build SOURCE_DICT:', error);
+    // Fallback to hardcoded values
+    SOURCE_DICT = {
+      direct: 'opt309346094',
+      liff: 'optOFn2osL',
+      X: 'optqRXvjoQ',
+      note: 'opt554171163',
+      LP: 'optpu3tsBy',
+      ads: 'optD08TRT9',
+      LINE_unfollow: 'opt1446290028',
+    };
+  }
+}
+
+// Single Select fields require object format { id: "opt..." }
+function asSingleSelect(optionId: string | undefined) {
+  return optionId ? { id: optionId } : undefined;
+}
+
+function toSource(label: SourceLabel) {
+  return asSingleSelect(SOURCE_DICT[label] ?? SOURCE_DICT['direct']);
 }
 
 async function getLineProfile(userId: string) {
@@ -152,6 +193,17 @@ async function baseUpdate(recordId: string, fields: any) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
+  console.log('ENV', {
+    vercelEnv: process.env.VERCEL_ENV,
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7),
+    appToken: process.env.LARK_APP_TOKEN,
+    tableId: process.env.LARK_TABLE_ID,
+    msgTableId: process.env.LARK_MESSAGES_TABLE_ID,
+  });
+
+  // Build source options dictionary on first request
+  await buildSourceDict();
+
   console.log('🟢 Webhook received');
 
   const events = req.body?.events || [];
@@ -201,7 +253,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status_message: profile?.statusMessage || '',
           joined_at: now,
           day: now,
-          source: asSingleSelect(getSourceOptionId('direct')),
+          source: toSource('direct'),
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: now,
@@ -241,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status_message: profile?.statusMessage || '',
           joined_at: createdAt,
           day: createdAt,
-          source: asSingleSelect(getSourceOptionId('direct')),
+          source: toSource('direct'),
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: createdAt,
@@ -326,7 +378,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           is_blocked: true,
           unsubscribed_at: now,
           last_active_date: now,
-          source: asSingleSelect(getSourceOptionId('LINE_unfollow')),
+          source: toSource('LINE_unfollow'),
         });
       } else {
         const created = await baseCreate({
@@ -335,7 +387,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           unsubscribed_at: now,
           day: now,
           last_active_date: now,
-          source: asSingleSelect(getSourceOptionId('LINE_unfollow')),
+          source: toSource('LINE_unfollow'),
           engagement_score: 0,
           total_interactions: 0,
         });
