@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { baseCreateMessageLog } from '../lark/message-log';
 
+// Helper function to format text fields for Bitable
+function textField(value: string) {
+  return value ? [{ text: value, type: 'text' }] : undefined;
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -153,9 +158,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (rec?.record_id) {
         // 既存レコードを更新（プロフィール情報も更新）
         await baseUpdate(rec.record_id, {
-          name: profile?.displayName || rec.fields.name,
-          profile_image_url: profile?.pictureUrl || rec.fields.profile_image_url,
-          status_message: profile?.statusMessage || rec.fields.status_message,
+          name: textField(profile?.displayName || rec.fields.name),
+          profile_image_url: textField(profile?.pictureUrl || rec.fields.profile_image_url),
+          status_message: textField(profile?.statusMessage || rec.fields.status_message),
           joined_at: now,
           last_active_date: now,
           is_blocked: false,
@@ -175,10 +180,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         // 新規レコードを作成（プロフィール情報を含める）
         const created = await baseCreate({
-          user_id: userId,
-          name: profile?.displayName || '',
-          profile_image_url: profile?.pictureUrl || '',
-          status_message: profile?.statusMessage || '',
+          user_id: textField(userId),
+          name: textField(profile?.displayName || ''),
+          profile_image_url: textField(profile?.pictureUrl || ''),
+          status_message: textField(profile?.statusMessage || ''),
           joined_at: now,
           day: now,
           source: 'direct',
@@ -215,10 +220,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('📱 LINE Profile (message):', profile);
 
         const created = await baseCreate({
-          user_id: userId,
-          name: profile?.displayName || '',
-          profile_image_url: profile?.pictureUrl || '',
-          status_message: profile?.statusMessage || '',
+          user_id: textField(userId),
+          name: textField(profile?.displayName || ''),
+          profile_image_url: textField(profile?.pictureUrl || ''),
+          status_message: textField(profile?.statusMessage || ''),
           joined_at: createdAt,
           day: createdAt,
           source: 'direct',
@@ -247,9 +252,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const current = rec.fields || {};
       const updateTimestamp = Date.now();
-      
+
       await baseUpdate(recordId, {
-        first_message_text: current.first_message_text || String(event.message.text),
+        first_message_text: textField(current.first_message_text || String(event.message.text)),
         engagement_score: (current.engagement_score || 0) + 1,
         total_interactions: (current.total_interactions || 0) + 1,
         last_active_date: updateTimestamp,
@@ -310,7 +315,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       } else {
         const created = await baseCreate({
-          user_id: userId,
+          user_id: textField(userId),
           is_blocked: true,
           unsubscribed_at: now,
           day: now,

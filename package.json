@@ -5,8 +5,12 @@
     "dev": "vercel dev"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "@vercel/node": "^3.0.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "ts-node": "^10.9.2"
   }
 }

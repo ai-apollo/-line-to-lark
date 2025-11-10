@@ -1,5 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// Helper function to format text fields for Bitable
+function textField(value: string) {
+  return value ? [{ text: value, type: 'text' }] : undefined;
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -88,16 +93,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (rec) {
       await baseUpdate(rec.record_id, {
         source: source || 'liff',
-        name: displayName || rec.fields.name,
-        profile_image_url: pictureUrl || rec.fields.profile_image_url,
+        name: textField(displayName || rec.fields.name),
+        profile_image_url: textField(pictureUrl || rec.fields.profile_image_url),
         last_active_date: Date.now(),
       });
     } else {
       const now = Date.now();
       await baseCreate({
-        user_id: userId,
-        name: displayName || '',
-        profile_image_url: pictureUrl || '',
+        user_id: textField(userId),
+        name: textField(displayName || ''),
+        profile_image_url: textField(pictureUrl || ''),
         source: source || 'liff',
         day: now,
         joined_at: now,
