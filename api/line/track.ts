@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await baseUpdate(rec.record_id, {
         source: source || 'liff',
         name: displayName || rec.fields.name,
-        profile_image: pictureUrl ? { link: pictureUrl } : rec.fields.profile_image,
+        profile_image_url: pictureUrl || rec.fields.profile_image_url,
         last_active_date: Date.now(),
       });
     } else {
@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await baseCreate({
         user_id: userId,
         name: displayName || '',
-        profile_image: pictureUrl ? { link: pictureUrl } : null,
+        profile_image_url: pictureUrl || '',
         source: source || 'liff',
         day: now,
         joined_at: now,

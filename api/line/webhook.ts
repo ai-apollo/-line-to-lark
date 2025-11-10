@@ -154,7 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // 既存レコードを更新（プロフィール情報も更新）
         await baseUpdate(rec.record_id, {
           name: profile?.displayName || rec.fields.name,
-          profile_image: profile?.pictureUrl ? { link: profile.pictureUrl } : rec.fields.profile_image,
+          profile_image_url: profile?.pictureUrl || rec.fields.profile_image_url,
           status_message: profile?.statusMessage || rec.fields.status_message,
           joined_at: now,
           last_active_date: now,
@@ -177,7 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const created = await baseCreate({
           user_id: userId,
           name: profile?.displayName || '',
-          profile_image: profile?.pictureUrl ? { link: profile.pictureUrl } : null,
+          profile_image_url: profile?.pictureUrl || '',
           status_message: profile?.statusMessage || '',
           joined_at: now,
           day: now,
@@ -217,7 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const created = await baseCreate({
           user_id: userId,
           name: profile?.displayName || '',
-          profile_image: profile?.pictureUrl ? { link: profile.pictureUrl } : null,
+          profile_image_url: profile?.pictureUrl || '',
           status_message: profile?.statusMessage || '',
           joined_at: createdAt,
           day: createdAt,
