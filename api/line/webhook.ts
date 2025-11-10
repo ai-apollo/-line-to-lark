@@ -1,6 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { baseCreateMessageLog } from '../lark/message-log';
 
+// Source field is Single Select type - must use option IDs
+const SOURCE_OPTIONS: Record<string, string> = {
+  'direct': 'opt309346094',
+  'LINE_unfollow': 'opt1446290028',
+  'liff': 'optOFn2osL',
+  'note': 'opt554171163',
+  'X': 'optqRXvjoQ',
+  'LP': 'optpu3tsBy',
+  'ads': 'optD08TRT9',
+};
+
+function getSourceOptionId(source: string): string {
+  return SOURCE_OPTIONS[source] || SOURCE_OPTIONS['direct'];
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -181,7 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status_message: profile?.statusMessage || '',
           joined_at: now,
           day: now,
-          source: 'direct',
+          source: getSourceOptionId('direct'),
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: now,
@@ -221,7 +236,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status_message: profile?.statusMessage || '',
           joined_at: createdAt,
           day: createdAt,
-          source: 'direct',
+          source: getSourceOptionId('direct'),
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: createdAt,
@@ -306,7 +321,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           is_blocked: true,
           unsubscribed_at: now,
           last_active_date: now,
-          source: 'LINE_unfollow',
+          source: getSourceOptionId('LINE_unfollow'),
         });
       } else {
         const created = await baseCreate({
@@ -315,7 +330,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           unsubscribed_at: now,
           day: now,
           last_active_date: now,
-          source: 'LINE_unfollow',
+          source: getSourceOptionId('LINE_unfollow'),
           engagement_score: 0,
           total_interactions: 0,
         });
