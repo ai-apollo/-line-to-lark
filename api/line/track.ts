@@ -15,6 +15,11 @@ function getSourceOptionId(source: string): string {
   return SOURCE_OPTIONS[source] || SOURCE_OPTIONS['direct'];
 }
 
+// Single Select fields require object format { id: "opt..." }
+function asSingleSelect(optionId: string) {
+  return { id: optionId };
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -102,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (rec) {
       await baseUpdate(rec.record_id, {
-        source: getSourceOptionId(source || 'liff'),
+        source: asSingleSelect(getSourceOptionId(source || 'liff')),
         name: displayName || rec.fields.name || '',
         profile_image_url: pictureUrl || rec.fields.profile_image_url || '',
         last_active_date: Date.now(),
@@ -113,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user_id: userId,
         name: displayName || '',
         profile_image_url: pictureUrl || '',
-        source: getSourceOptionId(source || 'liff'),
+        source: asSingleSelect(getSourceOptionId(source || 'liff')),
         day: now,
         joined_at: now,
         engagement_score: 0,

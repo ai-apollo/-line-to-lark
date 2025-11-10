@@ -16,6 +16,11 @@ function getSourceOptionId(source: string): string {
   return SOURCE_OPTIONS[source] || SOURCE_OPTIONS['direct'];
 }
 
+// Single Select fields require object format { id: "opt..." }
+function asSingleSelect(optionId: string) {
+  return { id: optionId };
+}
+
 async function getLarkToken() {
   const resp = await fetch(
     'https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal',
@@ -196,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status_message: profile?.statusMessage || '',
           joined_at: now,
           day: now,
-          source: getSourceOptionId('direct'),
+          source: asSingleSelect(getSourceOptionId('direct')),
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: now,
@@ -236,7 +241,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status_message: profile?.statusMessage || '',
           joined_at: createdAt,
           day: createdAt,
-          source: getSourceOptionId('direct'),
+          source: asSingleSelect(getSourceOptionId('direct')),
           engagement_score: 0,
           total_interactions: 0,
           last_active_date: createdAt,
@@ -321,7 +326,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           is_blocked: true,
           unsubscribed_at: now,
           last_active_date: now,
-          source: getSourceOptionId('LINE_unfollow'),
+          source: asSingleSelect(getSourceOptionId('LINE_unfollow')),
         });
       } else {
         const created = await baseCreate({
@@ -330,7 +335,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           unsubscribed_at: now,
           day: now,
           last_active_date: now,
-          source: getSourceOptionId('LINE_unfollow'),
+          source: asSingleSelect(getSourceOptionId('LINE_unfollow')),
           engagement_score: 0,
           total_interactions: 0,
         });
