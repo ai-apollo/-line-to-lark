@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LINE双方向チャット管理</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: #06C755;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .controls {
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #333;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-send {
+      background: #06C755;
+      color: white;
+    }
+    .btn-send:hover {
+      background: #05b34c;
+    }
+    .btn-load {
+      background: #4A90E2;
+      color: white;
+    }
+    .btn-load:hover {
+      background: #3a7bc8;
+    }
+    .chat-container {
+      padding: 20px;
+      min-height: 400px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .message {
+      margin-bottom: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    .message.incoming {
+      justify-content: flex-start;
+    }
+    .message.outgoing {
+      justify-content: flex-end;
+    }
+    .message-bubble {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      word-wrap: break-word;
+    }
+    .message.incoming .message-bubble {
+      background: #f0f0f0;
+      color: #333;
+      border-bottom-left-radius: 4px;
+    }
+    .message.outgoing .message-bubble {
+      background: #06C755;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .message-time {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 4px;
+    }
+    .message.system {
+      justify-content: center;
+    }
+    .message.system .message-bubble {
+      background: #e8f4fd;
+      color: #4A90E2;
+      font-size: 12px;
+      border-radius: 12px;
+    }
+    .status {
+      padding: 15px 20px;
+      background: #f9f9f9;
+      border-top: 1px solid #eee;
+      font-size: 13px;
+      color: #666;
+    }
+    .status.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    .status.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📱 LINE双方向チャット管理</h1>
+      <p>メッセージ送信 & 会話履歴表示</p>
+    </div>
+
+    <div class="controls">
+      <div class="form-group">
+        <label for="userId">LINE User ID</label>
+        <input type="text" id="userId" placeholder="例: U1234567890abcdef..." />
+      </div>
+
+      <div class="form-group">
+        <label for="message">送信メッセージ</label>
+        <textarea id="message" placeholder="送信したいメッセージを入力..."></textarea>
+      </div>
+
+      <div class="button-group">
+        <button class="btn-send" onclick="sendMessage()">📤 送信</button>
+        <button class="btn-load" onclick="loadHistory()">🔄 履歴を読み込み</button>
+      </div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+      <div class="message system">
+        <div class="message-bubble">
+          User IDを入力して「履歴を読み込み」をクリックしてください
+        </div>
+      </div>
+    </div>
+
+    <div class="status" id="status">準備完了</div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+
+    function setStatus(message, type = 'info') {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.className = 'status';
+      if (type !== 'info') {
+        statusEl.classList.add(type);
+      }
+    }
+
+    function formatTime(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function addMessageToUI(direction, text, timestamp, eventType = 'message') {
+      const container = document.getElementById('chatContainer');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${direction === 'system' ? 'system' : direction}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+
+      const textDiv = document.createElement('div');
+      textDiv.textContent = text;
+      bubble.appendChild(textDiv);
+
+      if (timestamp) {
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        timeDiv.textContent = formatTime(timestamp);
+        bubble.appendChild(timeDiv);
+      }
+
+      messageDiv.appendChild(bubble);
+      container.appendChild(messageDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const userId = document.getElementById('userId').value.trim();
+      const text = document.getElementById('message').value.trim();
+
+      if (!userId || !text) {
+        setStatus('❌ User IDとメッセージを入力してください', 'error');
+        return;
+      }
+
+      setStatus('📤 送信中...');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/line/send-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId, text }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          setStatus('✅ 送信成功！', 'success');
+          document.getElementById('message').value = '';
+
+          // UIに送信メッセージを追加
+          addMessageToUI('outgoing', text, new Date().toISOString());
+        } else {
+          setStatus(`❌ 送信失敗: ${result.error || result.details}`, 'error');
+        }
+      } catch (error) {
+        setStatus(`❌ エラー: ${error.message}`, 'error');
+      }
+    }
+
+    async function loadHistory() {
+      const userId = document.getElementById('userId').value.trim();
+
+      if (!userId) {
+        setStatus('❌ User IDを入力してください', 'error');
+        return;
+      }
+
+      setStatus('🔄 読み込み中...');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/line/get-chat-history?userId=${encodeURIComponent(userId)}`);
+        const result = await response.json();
+
+        if (result.success) {
+          const container = document.getElementById('chatContainer');
+          container.innerHTML = '';
+
+          if (result.history.length === 0) {
+            addMessageToUI('system', '会話履歴がありません', null);
+          } else {
+            result.history.forEach(msg => {
+              if (msg.event_type === 'follow') {
+                addMessageToUI('system', '👤 友だち追加', msg.timestamp);
+              } else if (msg.event_type === 'unfollow') {
+                addMessageToUI('system', '🚫 ブロック', msg.timestamp);
+              } else if (msg.message_type === 'text') {
+                addMessageToUI(msg.direction, msg.text, msg.timestamp);
+              }
+            });
+          }
+
+          setStatus(`✅ ${result.count}件の履歴を読み込みました`, 'success');
+        } else {
+          setStatus(`❌ 読み込み失敗: ${result.error}`, 'error');
+        }
+      } catch (error) {
+        setStatus(`❌ エラー: ${error.message}`, 'error');
+      }
+    }
+
+    // Enterキーで送信
+    document.getElementById('message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
