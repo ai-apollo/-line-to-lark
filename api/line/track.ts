@@ -68,13 +68,9 @@ async function buildSourceDict() {
   }
 }
 
-// Single Select fields require object format { id: "opt..." }
-function asSingleSelect(optionId: string | undefined) {
-  return optionId ? { id: optionId } : undefined;
-}
-
-function toSource(label: SourceLabel) {
-  return asSingleSelect(SOURCE_DICT[label] ?? SOURCE_DICT['direct']);
+// Single Select fields: send string value directly (not {id: "opt..."})
+function toSource(label: SourceLabel): string {
+  return label; // Return the label directly as string
 }
 
 async function baseFindByUserId(userId: string) {
