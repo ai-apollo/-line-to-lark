@@ -288,60 +288,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (event.type === 'message' && event.message?.type === 'text') {
       const text = event.message.text ?? '';
       const messageId = (event.message as any)?.id ?? '';
+      const updateTimestamp = Number(event.timestamp) || (Date.now() + 60 * 60 * 1000); // ms
 
       console.log('🟢 Handling message', { userId, messageId, textLen: text.length });
 
-      let rec = await baseFindByUserId(userId);
-      const createdAt = Date.now() + (60 * 60 * 1000); // +1時間調整
+      // 親のFriendsレコード取得は失敗しても続行
+      let recordId: string | undefined;
+      let rec: any;
+      try {
+        rec = await baseFindByUserId(userId);
+        recordId = rec?.record_id;
+      } catch (e) {
+        console.warn('⚠️ baseFindByUserId failed, continue without parent_user', e);
+      }
 
-      if (!rec) {
-        // レコードがない場合、プロフィール情報を取得して作成
-        const profile = await getLineProfile(userId);
-        console.log('📱 LINE Profile (message):', profile);
-
-        const created = await baseCreate({
-          user_id: userId,
-          name: profile?.displayName || '',
-          profile_image_url: profile?.pictureUrl || '',
-          status_message: profile?.statusMessage || '',
-          joined_at: createdAt,
-          day: createdAt,
-          source: toSource('direct'),
-          engagement_score: 0,
-          total_interactions: 0,
-          last_active_date: createdAt,
-          is_blocked: false,
-        });
-        if (created?.record_id) {
-          rec = { record_id: created.record_id, fields: created.fields } as any;
-        } else {
-          rec = await baseFindByUserId(userId);
+      // Friendsの更新も失敗で落とさない
+      if (recordId) {
+        try {
+          const current = rec?.fields || {};
+          await baseUpdate(recordId, {
+            first_message_text: current.first_message_text || text,
+            engagement_score: (current.engagement_score || 0) + 1,
+            total_interactions: (current.total_interactions || 0) + 1,
+            last_active_date: updateTimestamp,
+          });
+        } catch (e) {
+          console.warn('⚠️ baseUpdate skipped', e);
         }
       }
 
-      if (!rec) {
-        console.error('❌ Failed to find or create record');
-        continue;
-      }
+      console.log('🔵 Creating message log', { recordId, ts: updateTimestamp });
 
-      const recordId = rec.record_id;
-      if (!recordId) {
-        console.error('❌ Record missing record_id:', rec);
-        continue;
-      }
-
-      const current = rec.fields || {};
-      const updateTimestamp = Date.now() + (60 * 60 * 1000); // +1時間調整
-
-      await baseUpdate(recordId, {
-        first_message_text: current.first_message_text || text,
-        engagement_score: (current.engagement_score || 0) + 1,
-        total_interactions: (current.total_interactions || 0) + 1,
-        last_active_date: updateTimestamp,
-      });
-
-      console.log('🔵 Creating message log', { recordId, direction: 'incoming', ts: updateTimestamp });
-      
       try {
         await baseCreateMessageLog({
           message_record_id: `${updateTimestamp}-${messageId}`,
@@ -351,14 +328,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message_type: 'text',
           text,
           payload: '',
-          ts: updateTimestamp,
+          ts: updateTimestamp,            // 13桁のUNIX ms
           message_id: messageId,
           raw_json: JSON.stringify(event),
-          parent_user: [recordId],
+          parent_user: recordId ? [recordId] : undefined,
         });
-        console.log('✅ Message log created for user:', userId);
+        console.log('✅ Message log created', { userId });
       } catch (err) {
-        console.error('❌ Message log creation failed:', err);
+        console.error('❌ Message log create failed', err);
       }
       continue;
     }
