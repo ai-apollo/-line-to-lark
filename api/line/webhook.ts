@@ -325,20 +325,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log('👤 Friend record:', { recordId, name: friend?.fields?.name });
 
-      // Friendsの更新（メトリクス更新）
-      if (recordId) {
-        try {
-          const current = friend?.fields || {};
-          await baseUpdate(recordId, {
-            first_message_text: current.first_message_text || text,
-            engagement_score: (current.engagement_score || 0) + 1,
-            total_interactions: (current.total_interactions || 0) + 1,
-            last_active_date: updateTimestamp,
-          });
-        } catch (e) {
-          console.warn('⚠️ baseUpdate skipped', e);
-        }
-      }
+      // 親は更新しない。子（会話履歴）のみ追記
+      const current = friend?.fields || {};
 
       console.log('🔵 Creating message log', { recordId, ts: updateTimestamp });
 
@@ -355,6 +343,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message_id: messageId,
           raw_json: JSON.stringify(event),
           parent_user: parent,              // ★ 必ず user_id と parent_user を同時に送る
+          // ルックアップ代替の"写し取り"
+          from_name: current?.name || '',
+          from_source: current?.source || '',
         });
         console.log('✅ Message log created', { userId, parent });
       } catch (err) {

@@ -26,6 +26,8 @@ type Fields = {
   message_id?: string;
   raw_json?: string;
   parent_user?: string[];
+  from_name?: string;    // ルックアップ代替：親の name を写し取り
+  from_source?: string;  // ルックアップ代替：親の source を写し取り
 };
 
 export async function baseCreateMessageLog(fields: Fields) {
