@@ -2,7 +2,13 @@
   "name": "lark-to-line",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vercel dev"
+    "dev": "vercel dev",
+    "list-bases": "ts-node scripts/list-all-bases.ts",
+    "list-users": "ts-node scripts/list-users.ts",
+    "get-open-id": "ts-node scripts/get-open-id.ts",
+    "add-permission": "ts-node scripts/add-base-permission.ts",
+    "add-permission-all": "ts-node scripts/add-permission-to-all-bases.ts",
+    "delete-base": "ts-node scripts/delete-base.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

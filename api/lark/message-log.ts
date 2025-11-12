@@ -30,15 +30,18 @@ type Fields = {
 
 export async function baseCreateMessageLog(fields: Fields) {
   console.log('🔵 baseCreateMessageLog called with:', JSON.stringify(fields));
-  
+
   const token = await getLarkToken();
   const appToken = process.env.LARK_APP_TOKEN;
   const tableId = process.env.LARK_MESSAGES_TABLE_ID;
 
-  console.log('🔵 Env check:', { 
-    hasToken: !!token, 
-    hasAppToken: !!appToken, 
-    tableId: tableId 
+  // 追加: デバッグログ
+  console.log('[MessageLog] app=', appToken, 'table=', tableId);
+
+  console.log('🔵 Env check:', {
+    hasToken: !!token,
+    hasAppToken: !!appToken,
+    tableId: tableId
   });
 
   if (!token || !appToken || !tableId) {
@@ -57,10 +60,16 @@ export async function baseCreateMessageLog(fields: Fields) {
     body: JSON.stringify({ records: [{ fields }] }),
   });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    console.error('❌ Create Message Log Error:', resp.status, text);
-  } else {
-    console.log('✅ Message log created successfully');
+  const text = await resp.text();
+  try {
+    const json = JSON.parse(text);
+    if (json.code === 0) {
+      const ids = json.data?.records?.map((r: any) => r.record_id);
+      console.log('✅ Message log created successfully', { record_ids: ids });
+    } else {
+      console.error('❌ Create Message Log Error', json);
+    }
+  } catch {
+    console.error('❌ Create Message Log Non-JSON', { status: resp.status, body: text });
   }
 }

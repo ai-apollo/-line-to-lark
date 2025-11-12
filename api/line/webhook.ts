@@ -134,6 +134,7 @@ async function baseFindByUserId(userId: string) {
 async function baseCreate(fields: any): Promise<{ record_id: string; fields: any } | null> {
   const token = await getLarkToken();
   console.log('🔵 Creating new record');
+  console.log('[FriendsTable] app=', process.env.LARK_APP_TOKEN, 'table=', process.env.LARK_TABLE_ID);
   console.log('🔵 Create fields:', JSON.stringify(fields, null, 2));
 
   const resp = await fetch(
@@ -155,7 +156,13 @@ async function baseCreate(fields: any): Promise<{ record_id: string; fields: any
   }
 
   const result: any = await resp.json();
-  console.log('✅ Create response:', JSON.stringify(result, null, 2));
+  if (result.code === 0) {
+    const recordIds = result.data?.records?.map((r: any) => r.record_id);
+    console.log('✅ Friends table record created successfully', { record_ids: recordIds });
+  } else {
+    console.error('❌ Friends table create failed', result);
+  }
+  console.log('🔵 Create response:', JSON.stringify(result, null, 2));
 
   const record = result?.data?.records?.[0];
   if (!record?.record_id) return null;
@@ -212,6 +219,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!userId) continue;
 
     console.log('🟢 Processing event:', event.type, 'for user:', userId);
+
+    // 追加: イベントごとの環境変数確認
+    console.log('[Webhook] env', {
+      APP: process.env.LARK_APP_TOKEN,
+      USERS_TABLE: process.env.LARK_TABLE_ID,
+      MSG_TABLE: process.env.LARK_MESSAGES_TABLE_ID,
+      eventType: event.type,
+    });
 
     if (event.type === 'follow') {
       const now = Date.now();
