@@ -286,7 +286,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (event.type === 'message' && event.message?.type === 'text') {
-      console.log('🟡 Message event detected');
+      const text = event.message.text ?? '';
+      const messageId = (event.message as any)?.id ?? '';
+
+      console.log('🟢 Handling message', { userId, messageId, textLen: text.length });
 
       let rec = await baseFindByUserId(userId);
       const createdAt = Date.now() + (60 * 60 * 1000); // +1時間調整
@@ -331,20 +334,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const updateTimestamp = Date.now() + (60 * 60 * 1000); // +1時間調整
 
       await baseUpdate(recordId, {
-        first_message_text: current.first_message_text || String(event.message.text),
+        first_message_text: current.first_message_text || text,
         engagement_score: (current.engagement_score || 0) + 1,
         total_interactions: (current.total_interactions || 0) + 1,
         last_active_date: updateTimestamp,
       });
 
-      const text = event.message.text ?? '';
-      const messageId = (event.message as any)?.id;
-
-      console.log('🟡 About to call baseCreateMessageLog');
+      console.log('🔵 Creating message log', { recordId, direction: 'incoming', ts: updateTimestamp });
       
       try {
         await baseCreateMessageLog({
-          message_record_id: `${Date.now() + (60 * 60 * 1000)}-${messageId ?? ''}`,
+          message_record_id: `${updateTimestamp}-${messageId}`,
           user_id: userId,
           direction: 'incoming',
           event_type: 'message',
@@ -356,9 +356,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           raw_json: JSON.stringify(event),
           parent_user: [recordId],
         });
-        console.log('✅ baseCreateMessageLog completed');
+        console.log('✅ Message log created for user:', userId);
       } catch (err) {
-        console.error('❌ baseCreateMessageLog failed:', err);
+        console.error('❌ Message log creation failed:', err);
       }
       continue;
     }

@@ -49,7 +49,7 @@ async function checkMessageTableFields() {
 
   const expectedFields = [
     'message_record_id',
-    'line_user_id',
+    'user_id',
     'direction',
     'event_type',
     'message_type',
