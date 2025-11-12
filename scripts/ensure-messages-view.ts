@@ -47,11 +47,23 @@ function idByName(fields: Field[], name: string) {
   const fieldsRes = await lark(`/open-apis/bitable/v1/apps/${app}/tables/${table}/fields?page_size=500`, token);
   const fields = (fieldsRes?.data?.items || []) as Field[];
 
+  console.log('📋 All fields in table:');
+  fields.forEach((f: Field) => console.log(`  - ${f.field_name} (${f.field_id})`));
+  console.log('');
+
   // 表示順（左→右）：誰から → 本文 → 向き → 由来 → 時刻 → 以降よく使う順
   const orderNames = [
     'from_name', 'text', 'direction', 'from_source', 'ts',
     'message_type', 'event_type', 'user_id', 'message_id', 'parent_user', 'raw_json',
   ];
+
+  console.log('🔍 Checking which fields exist:');
+  orderNames.forEach(name => {
+    const exists = fields.some(f => f.field_name === name);
+    console.log(`  ${exists ? '✅' : '❌'} ${name}`);
+  });
+  console.log('');
+
   const displayFieldIds: string[] = orderNames
     .filter(n => fields.some(f => f.field_name === n))
     .map(n => idByName(fields, n));
@@ -63,16 +75,20 @@ function idByName(fields: Field[], name: string) {
   // 3) 既存ビュー更新 or 新規作成
   if (viewFromEnv) {
     // 既存ビューをPATCH（表示列/ソートをセット）
+    const payload = {
+      view_name: 'Grid View',
+      view_type: 'grid',
+      property: {
+        field_order: displayFieldIds,
+        visible_fields: displayFieldIds,  // 表示するフィールドを明示
+        sort_info: sorts.length > 0 ? sorts : undefined,
+      },
+    };
+    console.log('📝 Updating view with payload:', JSON.stringify(payload, null, 2));
+
     await lark(`/open-apis/bitable/v1/apps/${app}/tables/${table}/views/${viewFromEnv}`, token, {
       method: 'PATCH',
-      body: JSON.stringify({
-        view_name: 'Grid View',
-        view_type: 'grid',
-        property: {
-          field_order: displayFieldIds,
-          sort_info: sorts.length > 0 ? sorts : undefined,
-        },
-      }),
+      body: JSON.stringify(payload),
     });
     console.log('✅ Updated view:', viewFromEnv, { display_count: displayFieldIds.length, sorts });
   } else {
@@ -84,6 +100,7 @@ function idByName(fields: Field[], name: string) {
         view_type: 'grid',
         property: {
           field_order: displayFieldIds,
+          visible_fields: displayFieldIds,  // 表示するフィールドを明示
           sort_info: sorts.length > 0 ? sorts : undefined,
         },
       }),
