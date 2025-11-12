@@ -22,7 +22,7 @@ type Fields = {
   message_type?: string;
   text?: string;
   payload?: string;
-  ts?: string;
+  ts?: number;  // UNIXタイムスタンプ（ミリ秒）
   message_id?: string;
   raw_json?: string;
   parent_user?: string[];

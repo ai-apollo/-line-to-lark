@@ -230,7 +230,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (event.type === 'follow') {
       const now = Date.now();
-      const nowIso = new Date(now).toISOString();
 
       // LINEプロフィール情報を取得
       const profile = await getLineProfile(userId);
@@ -255,7 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           event_type: 'follow',
           message_type: 'system',
           text: 'followed',
-          ts: nowIso,
+          ts: now,
           raw_json: JSON.stringify(event),
           parent_user: [rec.record_id],
         });
@@ -282,7 +281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           event_type: 'follow',
           message_type: 'system',
           text: 'followed',
-          ts: nowIso,
+          ts: now,
           raw_json: JSON.stringify(event),
           parent_user: created?.record_id ? [created.record_id] : undefined,
         });
@@ -356,7 +355,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message_type: 'text',
           text,
           payload: '',
-          ts: new Date(updateTimestamp).toISOString(),
+          ts: updateTimestamp,
           message_id: messageId,
           raw_json: JSON.stringify(event),
           parent_user: [recordId],
@@ -378,7 +377,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         message_type: 'postback',
         text: '',
         payload: data,
-        ts: new Date().toISOString(),
+        ts: Date.now(),
         raw_json: JSON.stringify(event),
       });
       continue;
@@ -418,7 +417,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         event_type: 'unfollow',
         message_type: 'system',
         text: 'unfollowed',
-        ts: new Date().toISOString(),
+        ts: now,
         raw_json: JSON.stringify(event),
         parent_user: rec?.record_id ? [rec.record_id] : undefined,
       });
