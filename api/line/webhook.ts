@@ -225,7 +225,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     if (event.type === 'follow') {
-      const now = Date.now();
+      const now = Date.now() + (60 * 60 * 1000); // +1時間調整
 
       // LINEプロフィール情報を取得
       const profile = await getLineProfile(userId);
@@ -245,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         await baseCreateMessageLog({
           message_record_id: `${now}`,
-          line_user_id: userId,
+          user_id: userId,
           direction: 'system',
           event_type: 'follow',
           message_type: 'system',
@@ -272,7 +272,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         await baseCreateMessageLog({
           message_record_id: `${now}`,
-          line_user_id: userId,
+          user_id: userId,
           direction: 'system',
           event_type: 'follow',
           message_type: 'system',
@@ -289,7 +289,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('🟡 Message event detected');
 
       let rec = await baseFindByUserId(userId);
-      const createdAt = Date.now();
+      const createdAt = Date.now() + (60 * 60 * 1000); // +1時間調整
 
       if (!rec) {
         // レコードがない場合、プロフィール情報を取得して作成
@@ -328,7 +328,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const current = rec.fields || {};
-      const updateTimestamp = Date.now();
+      const updateTimestamp = Date.now() + (60 * 60 * 1000); // +1時間調整
 
       await baseUpdate(recordId, {
         first_message_text: current.first_message_text || String(event.message.text),
@@ -344,8 +344,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       try {
         await baseCreateMessageLog({
-          message_record_id: `${Date.now()}-${messageId ?? ''}`,
-          line_user_id: userId,
+          message_record_id: `${Date.now() + (60 * 60 * 1000)}-${messageId ?? ''}`,
+          user_id: userId,
           direction: 'incoming',
           event_type: 'message',
           message_type: 'text',
@@ -365,22 +365,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (event.type === 'postback') {
       const data = event.postback?.data ?? '';
+      const postbackTime = Date.now() + (60 * 60 * 1000); // +1時間調整
       await baseCreateMessageLog({
-        message_record_id: `${Date.now()}`,
-        line_user_id: userId,
+        message_record_id: `${postbackTime}`,
+        user_id: userId,
         direction: 'incoming',
         event_type: 'postback',
         message_type: 'postback',
         text: '',
         payload: data,
-        ts: Date.now(),
+        ts: postbackTime,
         raw_json: JSON.stringify(event),
       });
       continue;
     }
 
     if (event.type === 'unfollow') {
-      const now = Date.now();
+      const now = Date.now() + (60 * 60 * 1000); // +1時間調整
       let rec = await baseFindByUserId(userId);
 
       if (rec?.record_id) {
@@ -407,8 +408,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       await baseCreateMessageLog({
-        message_record_id: `${Date.now()}`,
-        line_user_id: userId,
+        message_record_id: `${now}`,
+        user_id: userId,
         direction: 'system',
         event_type: 'unfollow',
         message_type: 'system',

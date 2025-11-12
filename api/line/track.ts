@@ -161,10 +161,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         source: toSource(sourceLabel),
         name: displayName || rec.fields.name || '',
         profile_image_url: pictureUrl || rec.fields.profile_image_url || '',
-        last_active_date: Date.now(),
+        last_active_date: Date.now() + (60 * 60 * 1000), // +1時間調整
       });
     } else {
-      const now = Date.now();
+      const now = Date.now() + (60 * 60 * 1000); // +1時間調整
       await baseCreate({
         user_id: userId,
         name: displayName || '',
