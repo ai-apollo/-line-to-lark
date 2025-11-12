@@ -16,7 +16,7 @@ export async function getLarkToken(): Promise<string> {
 
 type Fields = {
   message_record_id?: string;
-  line_user_id?: string;
+  user_id?: string;  // Changed from line_user_id to match table
   direction?: string;
   event_type?: string;
   message_type?: string;
