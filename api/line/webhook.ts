@@ -127,6 +127,32 @@ async function baseFindByUserId(userId: string) {
   return j?.data?.items?.[0];
 }
 
+async function getOrCreateFriend(userId: string, profile?: { displayName?: string; pictureUrl?: string; statusMessage?: string }) {
+  // まず既存レコードを検索
+  const rec = await baseFindByUserId(userId).catch(() => undefined);
+  if (rec?.record_id) return rec;
+
+  // プロファイルが無い場合はLINEから取得（失敗しても空で良い）
+  const p = profile ?? (await getLineProfile(userId)) ?? {};
+  const now = Date.now() + (60 * 60 * 1000); // +1時間調整
+
+  console.log('🆕 Creating new friend record for:', userId);
+
+  return await baseCreate({
+    user_id: userId,
+    name: p.displayName || '',
+    profile_image_url: p.pictureUrl || '',
+    status_message: p.statusMessage || '',
+    source: toSource('direct'),
+    joined_at: now,
+    day: now,
+    engagement_score: 0,
+    total_interactions: 0,
+    last_active_date: now,
+    is_blocked: false,
+  });
+}
+
 async function baseCreate(fields: any): Promise<{ record_id: string; fields: any } | null> {
   const token = await getLarkToken();
   console.log('🔵 Creating new record');
@@ -292,20 +318,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log('🟢 Handling message', { userId, messageId, textLen: text.length });
 
-      // 親のFriendsレコード取得は失敗しても続行
-      let recordId: string | undefined;
-      let rec: any;
-      try {
-        rec = await baseFindByUserId(userId);
-        recordId = rec?.record_id;
-      } catch (e) {
-        console.warn('⚠️ baseFindByUserId failed, continue without parent_user', e);
-      }
+      // ★ 必ず親を用意して record_id を得る（見つからなければ作る）
+      const friend = await getOrCreateFriend(userId);
+      const recordId = friend?.record_id;
+      const parent = recordId ? [recordId] : undefined;
 
-      // Friendsの更新も失敗で落とさない
+      console.log('👤 Friend record:', { recordId, name: friend?.fields?.name });
+
+      // Friendsの更新（メトリクス更新）
       if (recordId) {
         try {
-          const current = rec?.fields || {};
+          const current = friend?.fields || {};
           await baseUpdate(recordId, {
             first_message_text: current.first_message_text || text,
             engagement_score: (current.engagement_score || 0) + 1,
@@ -331,9 +354,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ts: updateTimestamp,            // 13桁のUNIX ms
           message_id: messageId,
           raw_json: JSON.stringify(event),
-          parent_user: recordId ? [recordId] : undefined,
+          parent_user: parent,              // ★ 必ず user_id と parent_user を同時に送る
         });
-        console.log('✅ Message log created', { userId });
+        console.log('✅ Message log created', { userId, parent });
       } catch (err) {
         console.error('❌ Message log create failed', err);
       }
