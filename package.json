@@ -10,7 +10,8 @@
     "add-permission-all": "ts-node scripts/add-permission-to-all-bases.ts",
     "delete-base": "ts-node scripts/delete-base.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "read-history": "ts-node scripts/read-chat-history.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

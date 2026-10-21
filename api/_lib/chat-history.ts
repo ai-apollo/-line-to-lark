@@ -13,6 +13,7 @@ export type UserIdField = (typeof ALLOWED_USER_ID_FIELDS)[number];
 export const DEFAULT_LIMIT = 50;
 export const MAX_LIMIT = 500; // Lark bitable search page_size upper bound
 const MAX_PAGES = 20;
+export const MAX_ALL_RECORDS = 5000; // upper bound for an all-pages read
 
 // LINE Messaging API user IDs: "U" followed by 32 lowercase hex chars.
 const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
@@ -199,24 +200,51 @@ function parseSearchPage(body: Record<string, unknown>): SearchPage {
   return { items, hasMore: data.has_more, pageToken };
 }
 
+export type ReadOptions =
+  | { mode: 'limit'; limit: number }
+  | { mode: 'all' };
+
+// Why a read stopped. Only 'exhausted' means the full history was read.
+export type StopReason = 'exhausted' | 'limit_reached' | 'record_cap_reached' | 'page_cap_reached';
+
 export type HistoryResult = {
   records: HistoryRecord[];
-  // True when more matching records exist beyond `limit`.
-  hasMore: boolean;
+  complete: boolean;
+  stopReason: StopReason;
+  pagesRead: number;
 };
 
-// Reads up to `limit` records for one user. Any failure on any page rejects the
-// whole read: partial pages are never returned as if they were the full history.
+// Earliest plausible message timestamp (LINE launch, 2011-06-01 UTC) in ms.
+const MIN_TS_MS = Date.UTC(2011, 5, 1);
+const MAX_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
+
+export function parseTimestampMs(v: unknown, now: number): number {
+  if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < MIN_TS_MS || v > now + MAX_CLOCK_SKEW_MS) {
+    throw new HistoryError('malformed_response', 'Lark search record has an invalid ts');
+  }
+  return v;
+}
+
+function validateReadOptions(options: ReadOptions): void {
+  if (options.mode === 'all') return;
+  if (options.mode !== 'limit' || !Number.isInteger(options.limit) || options.limit < 1 || options.limit > MAX_LIMIT) {
+    throw new HistoryError('invalid_input', `limit must be an integer between 1 and ${MAX_LIMIT}`);
+  }
+}
+
+// Reads one user's history in chronological order. Any failure on any page rejects
+// the whole read: partial pages are never returned as if they were the full history.
+// A successful result is complete only when Lark reported no further pages.
 export async function readChatHistory(
   config: HistoryConfig,
   userId: string,
-  limit: number,
+  options: ReadOptions,
   fetchImpl: FetchLike = fetch,
+  now: () => number = Date.now,
 ): Promise<HistoryResult> {
   parseUserId(userId);
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-    throw new HistoryError('invalid_input', `limit must be an integer between 1 and ${MAX_LIMIT}`);
-  }
+  validateReadOptions(options);
+  const target = options.mode === 'limit' ? options.limit : MAX_ALL_RECORDS;
 
   const token = await fetchTenantToken(config, fetchImpl);
   const url =
@@ -224,12 +252,14 @@ export async function readChatHistory(
     `/tables/${encodeURIComponent(config.tableId)}/records/search`;
 
   const records: HistoryRecord[] = [];
+  const timestamps: number[] = [];
+  const seenRecordIds = new Set<string>();
   const seenTokens = new Set<string>();
+  const nowMs = now();
   let pageToken: string | undefined;
-  let hasMore = false;
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const pageSize = limit - records.length;
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const pageSize = Math.min(MAX_LIMIT, target - records.length);
     const query = new URLSearchParams({ page_size: String(pageSize) });
     if (pageToken) query.set('page_token', pageToken);
 
@@ -251,20 +281,34 @@ export async function readChatHistory(
     });
     const parsed = parseSearchPage(await readLarkJson(resp, 'Lark search request'));
 
+    if (parsed.items.length > pageSize) {
+      throw new HistoryError('malformed_response', 'Lark search returned more records than requested');
+    }
+    if (parsed.hasMore && parsed.items.length === 0) {
+      throw new HistoryError('malformed_response', 'Lark search returned an empty page with has_more');
+    }
     for (const item of parsed.items) {
       // Defense in depth: never return a record that belongs to another user.
       if (textValue(item.fields[config.userIdField]) !== userId) {
         throw new HistoryError('malformed_response', 'Lark search returned a record for a different user');
       }
+      if (seenRecordIds.has(item.record_id)) {
+        throw new HistoryError('malformed_response', 'Lark search returned a duplicate record');
+      }
+      const ts = parseTimestampMs(item.fields.ts, nowMs);
+      if (timestamps.length > 0 && ts < timestamps[timestamps.length - 1]) {
+        throw new HistoryError('malformed_response', 'Lark search returned records out of chronological order');
+      }
+      seenRecordIds.add(item.record_id);
+      timestamps.push(ts);
+      records.push(item);
     }
-    records.push(...parsed.items);
-    hasMore = parsed.hasMore;
 
-    if (records.length > limit) {
-      throw new HistoryError('malformed_response', 'Lark search returned more records than requested');
+    if (!parsed.hasMore) {
+      return finish(records, timestamps, 'exhausted', page);
     }
-    if (!parsed.hasMore || records.length === limit) {
-      return { records, hasMore };
+    if (records.length >= target) {
+      return finish(records, timestamps, options.mode === 'limit' ? 'limit_reached' : 'record_cap_reached', page);
     }
     if (seenTokens.has(parsed.pageToken!)) {
       throw new HistoryError('malformed_response', 'Lark search repeated a page_token');
@@ -273,7 +317,16 @@ export async function readChatHistory(
     pageToken = parsed.pageToken;
   }
 
-  throw new HistoryError('malformed_response', 'Lark search exceeded the page limit');
+  return finish(records, timestamps, 'page_cap_reached', MAX_PAGES);
+}
+
+function finish(records: HistoryRecord[], timestamps: number[], stopReason: StopReason, pagesRead: number): HistoryResult {
+  // Ties on ts are ordered by record_id so output is stable across runs.
+  const ordered = records
+    .map((record, i) => ({ record, ts: timestamps[i] }))
+    .sort((a, b) => a.ts - b.ts || (a.record.record_id < b.record.record_id ? -1 : a.record.record_id > b.record.record_id ? 1 : 0))
+    .map((x) => x.record);
+  return { records: ordered, complete: stopReason === 'exhausted', stopReason, pagesRead };
 }
 
 export function formatHistoryRecord(record: HistoryRecord) {
