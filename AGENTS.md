@@ -17,3 +17,5 @@ Adopt Conventional Commits (e.g. `feat: add line webhook validator`) to keep his
 
 ## Security & Configuration Notes
 Store secrets such as `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, and any Lark credentials in `.env.local`; never commit them. When sharing logs, redact personally identifiable information. Rotate credentials immediately after testing in shared environments and document any new environment variable in `AGENTS.md`.
+
+`LARK_MESSAGES_USER_ID_FIELD` (optional): the messages-table column the chat history reader filters on. Defaults to the canonical `user_id` written by `api/lark/message-log.ts`; set it to `line_user_id` only to read a legacy table explicitly. Any other value is rejected.
