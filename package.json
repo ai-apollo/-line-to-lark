@@ -8,12 +8,15 @@
     "get-open-id": "ts-node scripts/get-open-id.ts",
     "add-permission": "ts-node scripts/add-base-permission.ts",
     "add-permission-all": "ts-node scripts/add-permission-to-all-bases.ts",
-    "delete-base": "ts-node scripts/delete-base.ts"
+    "delete-base": "ts-node scripts/delete-base.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@vercel/node": "^3.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
