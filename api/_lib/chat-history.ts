@@ -360,10 +360,11 @@ export function toHttpError(err: unknown): { status: number; body: { error: stri
   return { status: 500, body: { error: 'Failed to get chat history' } };
 }
 
-// Log line without tokens, bodies or user identifiers.
+// Log line without tokens, bodies or user identifiers. Only fixed categories and
+// numeric provider codes; unexpected errors never contribute their name or message.
 export function describeError(err: unknown): Record<string, unknown> {
   if (err instanceof HistoryError) {
     return { kind: err.kind, upstreamStatus: err.upstreamStatus, larkCode: err.larkCode };
   }
-  return { kind: 'unexpected', name: err instanceof Error ? err.name : typeof err };
+  return { kind: 'unexpected' };
 }

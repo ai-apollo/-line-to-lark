@@ -58,7 +58,7 @@ export function parseArgs(argv: string[]): CliArgs | 'help' {
   const values = new Map<string, string | true>();
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
-    if (!VALUE_FLAGS.has(flag) && !BOOL_FLAGS.has(flag)) throw new UsageError(`unknown argument: ${flag.slice(0, 40)}`);
+    if (!VALUE_FLAGS.has(flag) && !BOOL_FLAGS.has(flag)) throw new UsageError(`unknown argument at position ${i + 1}`); // never echo caller input
     if (values.has(flag)) throw new UsageError(`duplicate argument: ${flag}`);
     if (VALUE_FLAGS.has(flag)) {
       const value = argv[++i];
@@ -168,12 +168,26 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
 
+// Metadata values the writers (webhook.ts, send-message.ts) produce, plus LINE message
+// types. Anything else from the provider is printed as a fixed placeholder, never verbatim.
+const DIRECTIONS = new Set(['incoming', 'outgoing', 'system']);
+const EVENT_TYPES = new Set(['message', 'follow', 'unfollow', 'postback']);
+const MESSAGE_TYPES = new Set(['text', 'image', 'video', 'audio', 'file', 'location', 'sticker', 'postback', 'system']);
+
+export function safeMetadata(v: unknown, allowed: Set<string>): string {
+  if (v === undefined || v === null || v === '') return '-';
+  return typeof v === 'string' && allowed.has(v) ? v : '(other)';
+}
+
 function formatRecord(record: HistoryRecord, index: number, includeText: boolean): string {
   const f = record.fields;
   const ts = new Date(f.ts as number).toISOString();
   const text = str(f.text);
   const body = includeText ? JSON.stringify(text) : `[text omitted, ${text.length} chars]`;
-  return `#${index + 1} ${ts} ${str(f.direction) || '-'} ${str(f.event_type) || '-'}/${str(f.message_type) || '-'} ${body}`;
+  const direction = safeMetadata(f.direction, DIRECTIONS);
+  const eventType = safeMetadata(f.event_type, EVENT_TYPES);
+  const messageType = safeMetadata(f.message_type, MESSAGE_TYPES);
+  return `#${index + 1} ${ts} ${direction} ${eventType}/${messageType} ${body}`;
 }
 
 export function formatResult(args: CliArgs, result: HistoryResult): string[] {
@@ -259,7 +273,14 @@ if (require.main === module) {
   runCli(process.argv.slice(2), {
     out: (l) => console.log(l),
     err: (l) => console.error(l),
-  }).then((code) => {
-    process.exitCode = code;
-  });
+  }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    () => {
+      // Fixed text only: an unexpected error's message could carry caller or provider data.
+      console.error('error: unexpected failure');
+      process.exitCode = EXIT.readError;
+    },
+  );
 }
