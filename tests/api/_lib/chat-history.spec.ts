@@ -392,6 +392,19 @@ describe('error sanitization', () => {
     expect(describeError(err)).toEqual({ kind: 'upstream_auth', upstreamStatus: 401, larkCode: undefined });
   });
 
+  it.each([
+    ['Error with sentinel message', () => new Error('SENTINEL_SECRET_MSG_7f3a')],
+    ['custom name', () => Object.assign(new Error('x'), { name: 'SENTINEL_SECRET_NAME_7f3a' })],
+    ['TypeError', () => new TypeError('SENTINEL_SECRET_MSG_7f3a')],
+    ['thrown string', () => 'SENTINEL_SECRET_MSG_7f3a'],
+    ['thrown object', () => ({ name: 'SENTINEL_SECRET_NAME_7f3a', message: 'SENTINEL_SECRET_MSG_7f3a' })],
+    ['undefined', () => undefined],
+  ])('describeError emits only a fixed category for unexpected errors: %s', (_name, make) => {
+    const d = describeError(make());
+    expect(d).toEqual({ kind: 'unexpected' });
+    expect(JSON.stringify(d)).not.toContain('SENTINEL');
+  });
+
   it('maps error kinds to HTTP statuses', () => {
     expect(toHttpError(new HistoryError('invalid_input', 'bad')).status).toBe(400);
     expect(toHttpError(new HistoryError('rate_limited', 'x')).status).toBe(503);

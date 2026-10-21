@@ -72,6 +72,99 @@ describe('read-chat-history CLI', () => {
     });
   });
 
+  describe('unknown arguments never echo caller input', () => {
+    const SENTINEL = 'SENTINEL_PASTED_SECRET_9c1e';
+    it.each([
+      ['bare pasted secret', ['--user-id', USER_A, SENTINEL]],
+      ['flag-shaped secret', ['--user-id', USER_A, `--${SENTINEL}`]],
+      ['flag=value form', [`--user-id=${SENTINEL}`]],
+      ['long secret first', [`${SENTINEL}${'x'.repeat(200)}`, '--user-id', USER_A]],
+      ['secret as a value of an unknown flag', ['--token', SENTINEL, '--user-id', USER_A]],
+    ])('%s', async (_name, argv) => {
+      const r = await run(argv);
+      expect(r.code).toBe(EXIT.usage);
+      expect(r.err[0]).toMatch(/^error: unknown argument at position \d+$/);
+      expect(r.all).not.toContain('SENTINEL');
+      expect(r.all).not.toContain('9c1e');
+      expect(globalFetch).not.toHaveBeenCalled();
+    });
+
+    it('an invalid --user-id value is not echoed', async () => {
+      const r = await run(['--user-id', SENTINEL]);
+      expect(r.code).toBe(EXIT.usage);
+      expect(r.all).not.toContain('SENTINEL');
+    });
+
+    it('an invalid --mode / --limit / --synthetic-count value is not echoed', async () => {
+      for (const argv of [
+        ['--user-id', USER_A, '--mode', SENTINEL],
+        ['--user-id', USER_A, '--limit', SENTINEL],
+        ['--user-id', USER_A, '--synthetic-count', SENTINEL],
+      ]) {
+        const r = await run(argv);
+        expect(r.code).toBe(EXIT.usage);
+        expect(r.all).not.toContain('SENTINEL');
+      }
+    });
+  });
+
+  describe('metadata output is allowlisted', () => {
+    it.each([
+      ['unexpected strings', { direction: 'SENTINEL_DIR', event_type: 'SENTINEL_EVT', message_type: 'SENTINEL_MSG' }, '(other) (other)/(other)'],
+      ['terminal escape sequences', { direction: '\u001b[31mincoming', event_type: 'message\n#2 fake', message_type: 'text\r' }, '(other) (other)/(other)'],
+      ['non-string values', { direction: ['incoming'], event_type: { v: 'message' }, message_type: 1 }, '(other) (other)/(other)'],
+      ['missing values', {}, '- -/-'],
+      ['allowed values', { direction: 'system', event_type: 'follow', message_type: 'system' }, 'system follow/system'],
+      ['postback', { direction: 'incoming', event_type: 'postback', message_type: 'postback' }, 'incoming postback/postback'],
+    ])('%s', async (_name, meta, expected) => {
+      const realFetch = vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(json({ code: 0, tenant_access_token: 't-synthetic-token' }))
+        .mockResolvedValueOnce(json({
+          code: 0,
+          data: { has_more: false, items: [{ record_id: 'rec1', fields: { user_id: USER_A, ts: 1700000000000, ...meta } }] },
+        }));
+      const r = await run(['--user-id', USER_A, '--mode', 'real'], {
+        proofSource: proof(BOT_A, BOT_A),
+        loadRealConfig: () => REAL_CONFIG,
+        realFetch,
+      });
+      expect(r.code).toBe(EXIT.complete);
+      const row = r.out.find((l) => l.startsWith('#1 '))!;
+      expect(row).toBe(`#1 2023-11-14T22:13:20.000Z ${expected} [text omitted, 0 chars]`);
+      expect(r.all).not.toContain('SENTINEL');
+      expect(r.all).not.toContain('\u001b');
+      expect(r.out.filter((l) => l.startsWith('#'))).toHaveLength(1);
+    });
+  });
+
+  describe('unexpected errors are reported as a fixed category', () => {
+    it('a non-HistoryError from the client prints no name or message', async () => {
+      const realFetch = vi.fn<typeof fetch>(async () => {
+        throw Object.assign(new Error('SENTINEL_ERR_MSG'), { name: 'SENTINEL_ERR_NAME' });
+      });
+      const r = await run(['--user-id', USER_A, '--mode', 'real'], {
+        proofSource: proof(BOT_A, BOT_A),
+        loadRealConfig: () => REAL_CONFIG,
+        realFetch,
+      });
+      expect(r.code).toBe(EXIT.readError);
+      expect(r.err[0]).toBe('error: read failed, no records returned {"kind":"unexpected"}');
+      expect(r.all).not.toContain('SENTINEL');
+    });
+
+    it('a config loader error prints no name or message', async () => {
+      const r = await run(['--user-id', USER_A, '--mode', 'real'], {
+        proofSource: proof(BOT_A, BOT_A),
+        loadRealConfig: () => {
+          throw new Error('SENTINEL_CONFIG_SECRET');
+        },
+      });
+      expect(r.code).toBe(EXIT.realModeRefused);
+      expect(r.err[0]).toBe('error: {"kind":"unexpected"}');
+      expect(r.all).not.toContain('SENTINEL');
+    });
+  });
+
   describe('synthetic mode (default)', () => {
     it('is the default and never uses the network', async () => {
       const r = await run(['--user-id', USER_A, '--all']);
